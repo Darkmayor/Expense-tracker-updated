@@ -1,0 +1,156 @@
+version: '3.7'
+
+services:
+  # ---------------------------------------------------------------------------
+  # INFRASTRUCTURE (Kafka, Zookeeper, MySQL)
+  # ---------------------------------------------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - expense-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - expense-network
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: Sanket@0198
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - expense-network
+
+  # ---------------------------------------------------------------------------
+  # MICROSERVICES
+  # ---------------------------------------------------------------------------
+  auth-service:
+    build: ./Authentication
+    container_name: auth-service
+    ports:
+      - "9898:9898"
+    env_file:
+      - ./Authentication/auth.env
+    depends_on:
+      - mysql
+      - kafka
+    networks:
+      - expense-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - expense-network
+
+  user-service:
+    build: ./UserService/UserService
+    container_name: user-service
+    ports:
+      - "9810:9810"
+    env_file:
+      - ./UserService/UserService/user.env
+    depends_on:
+      - mysql
+      - kafka
+      - redis
+    networks:
+      - expense-network
+
+  expense-service:
+    build: ./ExpenseService
+    container_name: expense-service
+    ports:
+      - "9820:9820"
+    env_file:
+      - ./ExpenseService/ExpenseService.env
+    depends_on:
+      - mysql
+      - kafka
+    networks:
+      - expense-network
+
+  ds-service:
+    build: ./DSService
+    container_name: ds-service
+    restart: always
+    ports:
+      - "8010:8010"
+    env_file:
+      - ./DSService/DS.env
+    environment:
+      KAFKA_HOST: kafka
+      KAFKA_PORT: 9092
+    depends_on:
+      - kafka
+    networks:
+      - expense-network
+
+  # ---------------------------------------------------------------------------
+  # API GATEWAY (Kong)
+  # ---------------------------------------------------------------------------
+  kong:
+    image: kong:3.4
+    container_name: kong-gateway
+    restart: always
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001, 0.0.0.0:8444 ssl
+      KONG_PLUGINS: bundled,custom-auth
+    volumes:
+      - ./Kong_Gateway/kong.yml:/kong/declarative/kong.yml
+      - ./Kong_Gateway/plugins/custom-auth:/usr/local/share/lua/5.1/kong/plugins/custom-auth
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+      - "8001:8001"
+      - "8444:8444"
+    networks:
+      - expense-network
+
+  konga:
+    image: pantsel/konga
+    container_name: konga
+    restart: always
+    ports:
+      - "1337:1337"
+    environment:
+      NODE_ENV: production
+    networks:
+      - expense-network
+
+networks:
+  expense-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
