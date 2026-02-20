@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.util.Strings;
 import org.slf4j.Logger;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +29,7 @@ public class ExpenseService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Transactional
+    @CacheEvict(value = "expenses", key = "#expenseDto.userId")
     public boolean createExpense(ExpenseDTO expenseDto){
         setCurrency(expenseDto);
         try{
@@ -39,20 +42,7 @@ public class ExpenseService {
         }
     }
 
-    public boolean updateExpense(ExpenseDTO expenseDto){
-        setCurrency(expenseDto);
-        Optional<Expense> expenseFoundOpt = expenseRepository.findByUserIdAndExternalId(expenseDto.getUserId(), expenseDto.getExternalId());
-        if(expenseFoundOpt.isEmpty()){
-            return false;
-        }
-        Expense expense = expenseFoundOpt.get();
-        expense.setAmount(expenseDto.getAmount());
-        expense.setMerchant(Strings.isNotBlank(expenseDto.getMerchant())?expenseDto.getMerchant():expense.getMerchant());
-        expense.setCurrency(Strings.isNotBlank(expenseDto.getCurrency())?expenseDto.getCurrency():expense.getCurrency());
-        expenseRepository.save(expense);
-        return true;
-    }
-
+    @Cacheable(value = "expenses", key = "#userId")
     public List<ExpenseDTO> getExpenses(String userId){
         List<Expense> expenseOpt = expenseRepository.findByUserId(userId);
         return objectMapper.convertValue(expenseOpt, new TypeReference<List<ExpenseDTO>>() {});

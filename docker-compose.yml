@@ -91,6 +91,7 @@ services:
     depends_on:
       - mysql
       - kafka
+      - redis
     networks:
       - expense-network
 
