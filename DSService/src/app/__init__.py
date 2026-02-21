@@ -4,6 +4,7 @@ from app.services.messageService import MessageService
 from kafka import KafkaProducer
 import json
 import os
+import uuid
 app = Flask(__name__)
 messageService = MessageService()
 kafka_host = os.getenv('KAFKA_HOST', 'localhost')
@@ -24,6 +25,7 @@ def handle_message():
     if result is not None:
         serialized_result = result.model_dump()
         serialized_result['user_id'] = user_id
+        serialized_result['external_id'] = str(uuid.uuid4())
         producer.send('expense_service', serialized_result)
         return jsonify(serialized_result)
     else:
