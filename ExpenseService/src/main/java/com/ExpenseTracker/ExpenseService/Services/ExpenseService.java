@@ -32,6 +32,10 @@ public class ExpenseService {
     @CacheEvict(value = "expenses", key = "#expenseDto.userId")
     public boolean createExpense(ExpenseDTO expenseDto){
         setCurrency(expenseDto);
+        if (Strings.isNotBlank(expenseDto.getExternalId()) && expenseRepository.existsByExternalId(expenseDto.getExternalId())) {
+            log.info("Expense with externalId {} already exists. Skipping duplicate event.", expenseDto.getExternalId());
+            return true;
+        }
         try{
 
             expenseRepository.save(objectMapper.convertValue(expenseDto, Expense.class));

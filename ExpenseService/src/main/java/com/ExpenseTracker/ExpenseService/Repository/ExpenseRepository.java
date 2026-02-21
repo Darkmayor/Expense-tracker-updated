@@ -17,4 +17,6 @@ public interface ExpenseRepository extends CrudRepository<Expense,Long> {
 
     Optional<Expense> findByUserIdAndExternalId(String userId, String externalId);
 
+    boolean existsByExternalId(String externalId);
+
 }
